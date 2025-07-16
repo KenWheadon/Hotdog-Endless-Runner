@@ -4,13 +4,13 @@ const CONFIG = {
   JUMP_POWER: -500, // pixels per second
   GROUND_Y: 340,
   INITIAL_SPAWN_DELAY: 3000,
-  MIN_SPAWN_DELAY: 1100, // Reduced from 1200 for faster spawning
-  DIFFICULTY_SCORE_THRESHOLD: 700, // Reduced from 800 for faster difficulty increase
+  MIN_SPAWN_DELAY: 900, // Reduced from 1200 for faster spawning
+  DIFFICULTY_SCORE_THRESHOLD: 600, // Reduced from 800 for faster difficulty increase
   SPEED_MULTIPLIER_RATE: 0.0003, // Doubled from 0.0002 for faster speed increase
   INVINCIBILITY_TIME: 2000, // milliseconds instead of frames
   TRAIL_LIFE: 167, // milliseconds (10 frames at 60fps)
   EXPERIENCE_PER_SWEET: 25,
-  LEVEL_MULTIPLIER: 1.75,
+  LEVEL_MULTIPLIER: 1.2,
   SCORE_PARTICLE_THRESHOLD: 100,
   COMBO_SCORE_BONUS: 5,
   PLAYER_MOVE_SPEED: 240, // pixels per second
@@ -24,11 +24,11 @@ const CONFIG = {
   PLAYER_Y_OFFSET: 20,
   MUSIC_THRESHOLDS: {
     TRACK_1: 0,
-    TRACK_2: 7500,
-    TRACK_3: 25000,
+    TRACK_2: 10000,
+    TRACK_3: 50000,
   },
   // Background color change threshold
-  BACKGROUND_COLOR_CHANGE_THRESHOLD: 5000,
+  BACKGROUND_COLOR_CHANGE_THRESHOLD: 10000,
   // Frame rate independence config
   TARGET_FPS: 60,
   MAX_DELTA_TIME: 1000 / 30, // Cap at 30 FPS minimum
