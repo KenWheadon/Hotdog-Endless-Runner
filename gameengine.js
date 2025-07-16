@@ -1,145 +1,24 @@
-class AudioManager {
-  constructor() {
-    this.musicTracks = {};
-    this.sfxTracks = {};
-    this.currentTrack = null;
-    this.musicVolume = 0.3;
-    this.sfxVolume = 0.5;
-    this.musicEnabled = true;
-    this.sfxEnabled = true;
-    this.initialized = false;
-  }
-
-  async init() {
-    if (this.initialized) return;
-
-    try {
-      for (const [key, path] of Object.entries(AUDIO_FILES.music)) {
-        const audio = new Audio(path);
-        audio.loop = true;
-        audio.volume = this.musicVolume;
-        this.musicTracks[key] = audio;
-      }
-
-      for (const [key, path] of Object.entries(AUDIO_FILES.sfx)) {
-        const audio = new Audio(path);
-        audio.volume = this.sfxVolume;
-        this.sfxTracks[key] = audio;
-      }
-
-      this.initialized = true;
-    } catch (error) {
-      console.warn("Audio initialization failed:", error);
-    }
-  }
-
-  updateMusicForScore(score) {
-    if (!this.musicEnabled || !this.initialized) return;
-
-    let targetTrack = "track1";
-    if (score >= CONFIG.MUSIC_THRESHOLDS.TRACK_3) {
-      targetTrack = "track3";
-    } else if (score >= CONFIG.MUSIC_THRESHOLDS.TRACK_2) {
-      targetTrack = "track2";
-    }
-
-    if (this.currentTrack !== targetTrack) {
-      this.switchTrack(targetTrack);
-    }
-  }
-
-  switchTrack(trackName) {
-    if (this.currentTrack && this.musicTracks[this.currentTrack]) {
-      this.musicTracks[this.currentTrack].pause();
-    }
-
-    this.currentTrack = trackName;
-    if (this.musicTracks[trackName]) {
-      this.musicTracks[trackName].currentTime = 0;
-      this.musicTracks[trackName]
-        .play()
-        .catch((e) => console.warn("Music play failed:", e));
-    }
-  }
-
-  playSFX(soundName) {
-    if (!this.sfxEnabled || !this.initialized || !this.sfxTracks[soundName])
-      return;
-
-    const audio = this.sfxTracks[soundName];
-    audio.currentTime = 0;
-    audio.play().catch((e) => console.warn("SFX play failed:", e));
-  }
-
-  stopMusic() {
-    if (this.currentTrack && this.musicTracks[this.currentTrack]) {
-      this.musicTracks[this.currentTrack].pause();
-    }
-    this.currentTrack = null;
-  }
-
-  toggleMusic() {
-    this.musicEnabled = !this.musicEnabled;
-    if (!this.musicEnabled) {
-      this.stopMusic();
-    }
-    return this.musicEnabled;
-  }
-
-  toggleSFX() {
-    this.sfxEnabled = !this.sfxEnabled;
-    return this.sfxEnabled;
-  }
-}
-
-class ImageManager {
-  constructor() {
-    this.images = {};
-    this.loaded = false;
-  }
-
-  async loadImages() {
-    if (this.loaded) return;
-
-    const imagePromises = Object.entries(IMAGE_FILES.player).map(
-      ([key, path]) => {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => {
-            this.images[key] = img;
-            resolve();
-          };
-          img.onerror = reject;
-          img.src = path;
-        });
-      }
-    );
-
-    try {
-      await Promise.all(imagePromises);
-      this.loaded = true;
-    } catch (error) {
-      console.warn("Image loading failed:", error);
-    }
-  }
-
-  getImage(key) {
-    return this.images[key];
-  }
-}
-
 class GameEngine {
   constructor() {
     this.canvas = document.getElementById("gameCanvas");
     this.ctx = this.canvas.getContext("2d");
     this.audioManager = new AudioManager();
     this.imageManager = new ImageManager();
+    this.achievementManager = new AchievementManager();
 
     this.initElements();
     this.initGameState();
     this.initPlayer();
     this.initEventListeners();
     this.setupAudioControls();
+    this.initTiming();
+  }
+
+  initTiming() {
+    this.lastTime = 0;
+    this.deltaTime = 0;
+    this.accumulator = 0;
+    this.animationFrame = 0;
   }
 
   initElements() {
@@ -173,8 +52,10 @@ class GameEngine {
     this.particles = [];
     this.lastObstacleTime = 0;
     this.animationTime = 0;
+    this.currentBackgroundIndex = 0;
 
     this.elements.highScore.textContent = `High Score: ${this.highScore}`;
+    this.updateBackgroundColor();
   }
 
   initPlayer() {
@@ -195,18 +76,42 @@ class GameEngine {
       health: 3,
       maxHealth: 3,
       invincible: false,
-      invincibilityTime: 0,
+      invincibilityTimer: 0,
       blinkTimer: 0,
       trail: [],
       moveLeft: false,
       moveRight: false,
-      coyoteTime: 0,
-      jumpBufferTime: 0,
+      coyoteTimer: 0,
+      jumpBufferTimer: 0,
       jumpHeld: false,
       state: PLAYER_STATES.RUNNING,
-      stateTime: 0,
+      stateTimer: 0,
       runFrame: 0,
     };
+  }
+
+  updateBackgroundColor() {
+    const newIndex = Math.floor(
+      this.score / CONFIG.BACKGROUND_COLOR_CHANGE_THRESHOLD
+    );
+    if (
+      newIndex !== this.currentBackgroundIndex &&
+      newIndex < BACKGROUND_GRADIENTS.length
+    ) {
+      this.currentBackgroundIndex = newIndex;
+      document.body.style.background =
+        BACKGROUND_GRADIENTS[this.currentBackgroundIndex];
+    } else if (newIndex >= BACKGROUND_GRADIENTS.length) {
+      // Cycle through colors if we exceed the array length
+      const cycleIndex = newIndex % BACKGROUND_GRADIENTS.length;
+      if (
+        cycleIndex !==
+        this.currentBackgroundIndex % BACKGROUND_GRADIENTS.length
+      ) {
+        this.currentBackgroundIndex = newIndex;
+        document.body.style.background = BACKGROUND_GRADIENTS[cycleIndex];
+      }
+    }
   }
 
   setupAudioControls() {
@@ -366,36 +271,38 @@ class GameEngine {
       width: 30,
       height: 30,
       emoji: config.emojis[Math.floor(Math.random() * config.emojis.length)],
-      speed: config.baseSpeed + Math.random() * 0.5 + speedMultiplier * 0.3,
+      speed: config.baseSpeed + Math.random() * 30 + speedMultiplier * 18, // pixels per second
       rotation: 0,
-      rotationSpeed: (Math.random() - 0.5) * 0.15,
+      rotationSpeed: (Math.random() - 0.5) * 9, // radians per second
       type: enemyType,
       movementType: config.movementType,
       bounceOffset: Math.random() * Math.PI * 2,
-      bounceSpeed: 0.05 + Math.random() * 0.03,
+      bounceSpeed: 3 + Math.random() * 1.8, // radians per second
     });
   }
 
-  updatePlayer() {
+  updatePlayer(deltaTime) {
+    const deltaSeconds = deltaTime / 1000;
+
     if (this.player.moveLeft && this.player.x > 0) {
-      this.player.x -= CONFIG.PLAYER_MOVE_SPEED;
+      this.player.x -= CONFIG.PLAYER_MOVE_SPEED * deltaSeconds;
     }
     if (
       this.player.moveRight &&
       this.player.x < CONFIG.CANVAS_WIDTH - this.player.displayWidth
     ) {
-      this.player.x += CONFIG.PLAYER_MOVE_SPEED;
+      this.player.x += CONFIG.PLAYER_MOVE_SPEED * deltaSeconds;
     }
 
     const wasOnGround = this.player.onGround;
 
     if (this.player.jumpHeld && this.player.velocityY < 0) {
-      this.player.velocityY += CONFIG.GRAVITY * 0.5;
+      this.player.velocityY += CONFIG.GRAVITY * deltaSeconds * 0.5;
     } else {
-      this.player.velocityY += CONFIG.GRAVITY;
+      this.player.velocityY += CONFIG.GRAVITY * deltaSeconds;
     }
 
-    this.player.y += this.player.velocityY;
+    this.player.y += this.player.velocityY * deltaSeconds;
 
     if (
       this.player.y + this.player.displayHeight >=
@@ -406,49 +313,50 @@ class GameEngine {
       this.player.velocityY = 0;
       this.player.onGround = true;
       this.player.jumpsLeft = 2;
-      this.player.coyoteTime = CONFIG.COYOTE_TIME;
+      this.player.coyoteTimer = CONFIG.COYOTE_TIME;
     } else {
       this.player.onGround = false;
     }
 
     if (wasOnGround && !this.player.onGround) {
-      this.player.coyoteTime = CONFIG.COYOTE_TIME;
-    } else if (this.player.coyoteTime > 0) {
-      this.player.coyoteTime--;
+      this.player.coyoteTimer = CONFIG.COYOTE_TIME;
+    } else if (this.player.coyoteTimer > 0) {
+      this.player.coyoteTimer -= deltaTime;
     }
 
-    if (this.player.jumpBufferTime > 0) {
-      this.player.jumpBufferTime--;
+    if (this.player.jumpBufferTimer > 0) {
+      this.player.jumpBufferTimer -= deltaTime;
     }
 
     if (
-      this.player.jumpBufferTime > 0 &&
+      this.player.jumpBufferTimer > 0 &&
       (this.player.onGround ||
-        this.player.coyoteTime > 0 ||
+        this.player.coyoteTimer > 0 ||
         this.player.jumpsLeft > 0)
     ) {
       this.performJump();
-      this.player.jumpBufferTime = 0;
+      this.player.jumpBufferTimer = 0;
     }
 
-    this.updatePlayerState();
-    this.updatePlayerTrail();
-    this.updateInvincibility();
+    this.updatePlayerState(deltaTime);
+    this.updatePlayerTrail(deltaTime);
+    this.updateInvincibility(deltaTime);
   }
 
-  updatePlayerState() {
-    this.player.stateTime++;
+  updatePlayerState(deltaTime) {
+    this.player.stateTimer += deltaTime;
 
     if (this.player.state === PLAYER_STATES.RUNNING) {
       this.player.runFrame =
-        Math.floor(this.animationTime * CONFIG.ANIMATION_SPEED) % 4;
-    } else if (this.player.stateTime > 30) {
+        Math.floor(this.animationFrame / (1000 / CONFIG.ANIMATION_SPEED)) % 4;
+    } else if (this.player.stateTimer > 500) {
+      // 500ms instead of 30 frames
       this.player.state = PLAYER_STATES.RUNNING;
-      this.player.stateTime = 0;
+      this.player.stateTimer = 0;
     }
   }
 
-  updatePlayerTrail() {
+  updatePlayerTrail(deltaTime) {
     if (this.player.trail.length > 0) {
       this.player.trail.push({
         x: this.player.x + this.player.displayWidth / 2,
@@ -457,41 +365,45 @@ class GameEngine {
       });
 
       for (let i = this.player.trail.length - 1; i >= 0; i--) {
-        if (--this.player.trail[i].life <= 0) {
+        this.player.trail[i].life -= deltaTime;
+        if (this.player.trail[i].life <= 0) {
           this.player.trail.splice(i, 1);
         }
       }
     }
   }
 
-  updateInvincibility() {
+  updateInvincibility(deltaTime) {
     if (this.player.invincible) {
-      this.player.invincibilityTime--;
-      this.player.blinkTimer++;
-      if (this.player.invincibilityTime <= 0) {
+      this.player.invincibilityTimer -= deltaTime;
+      this.player.blinkTimer += deltaTime;
+      if (this.player.invincibilityTimer <= 0) {
         this.player.invincible = false;
       }
     }
   }
 
-  updateObstacles() {
+  updateObstacles(deltaTime) {
+    const deltaSeconds = deltaTime / 1000;
+
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       const obstacle = this.obstacles[i];
-      obstacle.x -= obstacle.speed;
-      obstacle.rotation += obstacle.rotationSpeed;
+      obstacle.x -= obstacle.speed * deltaSeconds;
+      obstacle.rotation += obstacle.rotationSpeed * deltaSeconds;
 
       if (obstacle.movementType === "bouncing") {
-        obstacle.bounceOffset += obstacle.bounceSpeed;
+        obstacle.bounceOffset += obstacle.bounceSpeed * deltaSeconds;
         obstacle.y =
           obstacle.baseY - Math.abs(Math.sin(obstacle.bounceOffset) * 25);
       } else if (obstacle.movementType === "flying") {
-        obstacle.y += Math.sin(obstacle.x * 0.01) * 0.5;
+        obstacle.y += Math.sin(obstacle.x * 0.01) * 0.5 * deltaSeconds * 60; // Maintain same visual effect
       }
 
       if (obstacle.x < -obstacle.width) {
         this.obstacles.splice(i, 1);
         this.combo++;
         this.updateComboDisplay();
+        this.achievementManager.trackCombo(this.combo);
       }
     }
 
@@ -513,18 +425,20 @@ class GameEngine {
     );
   }
 
-  updateParticles() {
+  updateParticles(deltaTime) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
-      particle.x += particle.vx;
-      particle.y += particle.vy;
-      particle.life--;
+      const deltaSeconds = deltaTime / 1000;
+
+      particle.x += particle.vx * deltaSeconds * 60; // Maintain same visual speed
+      particle.y += particle.vy * deltaSeconds * 60;
+      particle.life -= deltaTime;
 
       if (particle.type === "jump") {
-        particle.vy += 0.1;
+        particle.vy += 6 * deltaSeconds; // Gravity effect on jump particles
       } else if (particle.type === "hit") {
-        particle.vx *= 0.95;
-        particle.vy *= 0.95;
+        particle.vx *= Math.pow(0.95, deltaSeconds * 60); // Maintain same decay rate
+        particle.vy *= Math.pow(0.95, deltaSeconds * 60);
       }
 
       if (particle.life <= 0) {
@@ -556,10 +470,10 @@ class GameEngine {
     if (type === "harmful") {
       this.player.health--;
       this.player.invincible = true;
-      this.player.invincibilityTime = CONFIG.INVINCIBILITY_FRAMES;
+      this.player.invincibilityTimer = CONFIG.INVINCIBILITY_TIME;
       this.player.blinkTimer = 0;
       this.player.state = PLAYER_STATES.HIT;
-      this.player.stateTime = 0;
+      this.player.stateTimer = 0;
       this.combo = 0;
 
       this.updateHeartsDisplay();
@@ -572,18 +486,20 @@ class GameEngine {
     } else if (type === "sweet") {
       this.experience += CONFIG.EXPERIENCE_PER_SWEET;
       this.player.state = PLAYER_STATES.GOOD;
-      this.player.stateTime = 0;
+      this.player.stateTimer = 0;
       this.createParticles("score", x, y);
       this.playEffect("sweet");
       this.checkLevelUp();
+      this.achievementManager.trackSweetCollected();
     } else if (type === "healing") {
       if (this.player.health < this.player.maxHealth) {
         this.player.health++;
         this.player.state = PLAYER_STATES.GOOD;
-        this.player.stateTime = 0;
+        this.player.stateTimer = 0;
         this.updateHeartsDisplay();
         this.createParticles("heal", x, y);
         this.playEffect("heal");
+        this.achievementManager.trackHotdogCollected();
       }
     }
   }
@@ -599,7 +515,7 @@ class GameEngine {
       this.player.maxHealth++;
       this.player.health = this.player.maxHealth;
       this.player.state = PLAYER_STATES.LEVEL_UP;
-      this.player.stateTime = 0;
+      this.player.stateTimer = 0;
 
       this.createParticles(
         "levelUp",
@@ -610,6 +526,7 @@ class GameEngine {
       this.elements.playerLevel.textContent = `Level: ${this.level}`;
       this.updateHeartsDisplay();
       this.playEffect("levelUp");
+      this.achievementManager.trackLevel(this.level);
     }
 
     this.elements.experience.textContent = `XP: ${this.experience}/${this.experienceToNextLevel}`;
@@ -635,6 +552,9 @@ class GameEngine {
     this.elements.score.textContent = `Score: ${this.score}`;
 
     this.audioManager.updateMusicForScore(this.score);
+    this.updateBackgroundColor();
+    this.achievementManager.trackScore(this.score);
+    this.achievementManager.trackDistance(this.score);
 
     if (this.score % CONFIG.SCORE_PARTICLE_THRESHOLD === 0) {
       this.playEffect("score");
@@ -651,6 +571,7 @@ class GameEngine {
           this.player.y
         );
         this.audioManager.playSFX("jump");
+        this.achievementManager.trackJump();
       },
       hit: () => {
         this.createParticles(
@@ -697,11 +618,11 @@ class GameEngine {
   }
 
   performJump() {
-    if (this.player.onGround || this.player.coyoteTime > 0) {
+    if (this.player.onGround || this.player.coyoteTimer > 0) {
       this.player.velocityY = CONFIG.JUMP_POWER;
       this.player.jumpsLeft = 1;
       this.player.onGround = false;
-      this.player.coyoteTime = 0;
+      this.player.coyoteTimer = 0;
       this.playEffect("jump");
     } else if (this.player.jumpsLeft > 0) {
       this.player.velocityY = CONFIG.JUMP_POWER;
@@ -713,12 +634,12 @@ class GameEngine {
   jump() {
     if (
       this.player.onGround ||
-      this.player.coyoteTime > 0 ||
+      this.player.coyoteTimer > 0 ||
       this.player.jumpsLeft > 0
     ) {
       this.performJump();
     } else {
-      this.player.jumpBufferTime = CONFIG.JUMP_BUFFER_TIME;
+      this.player.jumpBufferTimer = CONFIG.JUMP_BUFFER_TIME;
     }
   }
 
@@ -740,16 +661,16 @@ class GameEngine {
       health: 3,
       maxHealth: 3,
       invincible: false,
-      invincibilityTime: 0,
+      invincibilityTimer: 0,
       blinkTimer: 0,
       trail: [],
       moveLeft: false,
       moveRight: false,
-      coyoteTime: 0,
-      jumpBufferTime: 0,
+      coyoteTimer: 0,
+      jumpBufferTimer: 0,
       jumpHeld: false,
       state: PLAYER_STATES.RUNNING,
-      stateTime: 0,
+      stateTimer: 0,
       runFrame: 0,
     });
 
@@ -763,13 +684,15 @@ class GameEngine {
     this.lastObstacleTime = 0;
     this.screenShake = 0;
     this.backgroundOffset = 0;
-    this.animationTime = 0;
+    this.animationFrame = 0;
+    this.currentBackgroundIndex = 0;
 
     this.elements.score.textContent = "Score: 0";
     this.elements.playerLevel.textContent = "Level: 1";
     this.elements.experience.textContent = "XP: 0/100";
     this.updateHeartsDisplay();
     this.updateComboDisplay();
+    this.updateBackgroundColor();
   }
 
   startGame() {
@@ -785,6 +708,7 @@ class GameEngine {
     this.gameRunning = false;
 
     this.audioManager.stopMusic();
+    this.achievementManager.gameEnded();
 
     const isNewHighScore = this.score > this.highScore;
     if (isNewHighScore) {
@@ -808,8 +732,10 @@ class GameEngine {
     this.audioManager.updateMusicForScore(0);
   }
 
-  drawBackground() {
-    this.backgroundOffset += 0.5;
+  drawBackground(deltaTime) {
+    const deltaSeconds = deltaTime / 1000;
+    this.backgroundOffset += CONFIG.BACKGROUND_SCROLL_SPEED * deltaSeconds;
+
     this.ctx.globalAlpha = 0.3;
     this.ctx.font = "40px Arial";
     this.ctx.fillText("☁️", (this.backgroundOffset % 900) - 100, 80);
@@ -839,7 +765,7 @@ class GameEngine {
   drawPlayer() {
     if (
       this.player.invincible &&
-      Math.floor(this.player.blinkTimer / 10) % 2 === 1
+      Math.floor(this.player.blinkTimer / 167) % 2 === 1 // 167ms = 10 frames at 60fps
     )
       return;
 
@@ -924,21 +850,21 @@ class GameEngine {
     this.ctx.globalAlpha = 1;
   }
 
-  render() {
+  render(deltaTime) {
     if (this.screenShake > 0) {
       this.ctx.save();
       this.ctx.translate(
         (Math.random() - 0.5) * this.screenShake,
         (Math.random() - 0.5) * this.screenShake
       );
-      this.screenShake *= 0.9;
+      this.screenShake *= Math.pow(0.9, deltaTime / 16.67); // Frame rate independent decay
       if (this.screenShake < 0.1) this.screenShake = 0;
     }
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     if (this.gameState === "playing") {
-      this.drawBackground();
+      this.drawBackground(deltaTime);
       this.ctx.fillStyle = "#8B4513";
       this.ctx.fillRect(0, CONFIG.GROUND_Y + 30, this.canvas.width, 30);
       this.drawTrail();
@@ -965,21 +891,29 @@ class GameEngine {
     }
   }
 
-  gameLoop() {
+  gameLoop(currentTime = 0) {
+    // Calculate delta time
+    this.deltaTime = currentTime - this.lastTime;
+    this.lastTime = currentTime;
+
+    // Cap delta time to prevent huge jumps
+    this.deltaTime = Math.min(this.deltaTime, CONFIG.MAX_DELTA_TIME);
+
+    // Update animation frame counter
+    this.animationFrame += this.deltaTime;
+
     if (this.gameRunning && this.gameState === "playing") {
-      this.animationTime++;
-      this.updatePlayer();
-      this.updateObstacles();
+      this.updatePlayer(this.deltaTime);
+      this.updateObstacles(this.deltaTime);
       this.checkCollisions();
       this.updateScore();
-      this.updateParticles();
+      this.updateParticles(this.deltaTime);
     }
 
-    this.render();
-    requestAnimationFrame(() => this.gameLoop());
+    this.render(this.deltaTime);
+    requestAnimationFrame((time) => this.gameLoop(time));
   }
 }
 
 const game = new GameEngine();
 game.init();
-da;

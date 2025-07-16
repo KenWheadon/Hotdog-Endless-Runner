@@ -40,13 +40,23 @@
     ></div>
 
     <div id="gameContainer">
+      <!-- Enhanced UI Layout -->
       <div id="ui">
-        <div id="hearts">❤️❤️❤️</div>
-        <div id="playerLevel">Level: 1</div>
-        <div id="experience">XP: 0/100</div>
-        <div id="score">Score: 0</div>
-        <div id="highScore">High Score: 0</div>
+        <div class="left-section">
+          <div id="hearts">❤️❤️❤️</div>
+          <div id="playerLevel">Level: 1</div>
+          <div id="experience">XP: 0/100</div>
+        </div>
+        <div class="center-section">
+          <div id="score">Score: 0</div>
+          <div id="highScore">High Score: 0</div>
+        </div>
+        <div class="right-section">
+          <div id="achievementProgress">0/12 🏆</div>
+          <button id="achievementsBtn">Achievements</button>
+        </div>
       </div>
+
       <canvas id="gameCanvas" width="800" height="400"></canvas>
       <div id="instructions">
         SPACE to jump (hold for higher!) • A/D or Arrow Keys to move • Survive
@@ -64,7 +74,7 @@
           <div class="feature">❤️ Gain Health by Leveling Up</div>
           <div class="feature">🍪 Collect Sweets for Experience</div>
           <div class="feature">🌭 Find Healing Hotdogs Rarely</div>
-          <div class="feature">🏆 Beat Your High Score!</div>
+          <div class="feature">🏆 Unlock Achievements for Rewards!</div>
         </div>
         <button id="startBtn">START GAME</button>
       </div>
@@ -80,10 +90,37 @@
         </p>
         <button id="restartBtn">Play Again</button>
       </div>
+
+      <!-- Achievements Panel -->
+      <div id="achievementsPanel">
+        <h2>🏆 Achievements</h2>
+        <div id="achievementsList" class="achievement-grid">
+          <!-- Achievement cards will be dynamically generated -->
+        </div>
+        <button id="closeAchievements">Close</button>
+      </div>
+    </div>
+
+    <!-- Achievement Notification -->
+    <div id="achievementNotification">
+      <div class="achievement-notification-content">
+        <div class="achievement-notification-icon"></div>
+        <div class="achievement-notification-text">
+          <div class="achievement-notification-title">
+            Achievement Unlocked!
+          </div>
+          <div class="achievement-notification-name"></div>
+          <div class="achievement-notification-description"></div>
+          <div class="achievement-notification-reward"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Load JavaScript files in correct order -->
     <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script src="AudioManager.js"></script>
+    <script src="ImageManager.js"></script>
+    <script src="AchievementManager.js"></script>
+    <script src="GameEngine.js"></script>
   </body>
 </html>
