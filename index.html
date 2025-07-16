@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌭 HOTDOG RUNNER 🌭</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Background particles -->
+    <div
+      class="bg-particle"
+      style="top: 10%; left: 10%; width: 6px; height: 6px; animation-delay: 0s"
+    ></div>
+    <div
+      class="bg-particle"
+      style="top: 20%; left: 80%; width: 8px; height: 8px; animation-delay: 1s"
+    ></div>
+    <div
+      class="bg-particle"
+      style="top: 60%; left: 15%; width: 4px; height: 4px; animation-delay: 2s"
+    ></div>
+    <div
+      class="bg-particle"
+      style="
+        top: 80%;
+        left: 70%;
+        width: 10px;
+        height: 10px;
+        animation-delay: 3s;
+      "
+    ></div>
+    <div
+      class="bg-particle"
+      style="top: 40%; left: 90%; width: 5px; height: 5px; animation-delay: 4s"
+    ></div>
+    <div
+      class="bg-particle"
+      style="top: 70%; left: 5%; width: 7px; height: 7px; animation-delay: 5s"
+    ></div>
+
+    <div id="gameContainer">
+      <div id="ui">
+        <div id="hearts">❤️❤️❤️</div>
+        <div id="playerLevel">Level: 1</div>
+        <div id="experience">XP: 0/100</div>
+        <div id="score">Score: 0</div>
+        <div id="highScore">High Score: 0</div>
+      </div>
+      <canvas id="gameCanvas" width="800" height="400"></canvas>
+      <div id="instructions">
+        SPACE to jump (hold for higher!) • A/D or Arrow Keys to move • Survive
+        as long as possible!
+      </div>
+
+      <div id="comboDisplay">🔥 COMBO x0</div>
+
+      <div id="startScreen">
+        <h1>🌭 HOTDOG RUNNER 🌭</h1>
+        <div class="hotdog">🌭</div>
+        <div class="features">
+          <div class="feature">🦘 SPACE to jump (hold for higher jumps!)</div>
+          <div class="feature">⬅️➡️ A/D or Arrow Keys to move</div>
+          <div class="feature">❤️ Gain Health by Leveling Up</div>
+          <div class="feature">🍪 Collect Sweets for Experience</div>
+          <div class="feature">🌭 Find Healing Hotdogs Rarely</div>
+          <div class="feature">🏆 Beat Your High Score!</div>
+        </div>
+        <button id="startBtn">START GAME</button>
+      </div>
+
+      <div id="gameOver">
+        <h2>🎮 Game Over! 🎮</h2>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <p
+          id="newHighScore"
+          style="display: none; color: #ffd700; font-weight: bold"
+        >
+          🏆 NEW HIGH SCORE! 🏆
+        </p>
+        <button id="restartBtn">Play Again</button>
+      </div>
+    </div>
+
+    <!-- Load JavaScript files in correct order -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
